@@ -2,7 +2,8 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from sqlalchemy import create_engine
-import pandas as pd
+from sqlalchemy.sql import text
+import polars as pl
 import numpy as np
 
 class DatabaseConnectionManager:
@@ -57,17 +58,26 @@ class DatabaseConnectionManager:
         self.current_db_type = db_type
     
     def load_table_data(self, table_name: str):
-        
         """Carrega os dados de uma tabela do banco configurado."""
         if not self.engine:
             raise ValueError("Conexão com o banco de dados não configurada.")
         if not table_name:
             raise ValueError("Nome da tabela não fornecido.")
         
-        df = pd.read_sql_table(table_name, con=self.engine)
+        # Lê a tabela usando SQLAlchemy e converte para polars
+        query = text(f"SELECT * FROM {table_name}")  # Use text para tornar a consulta executável
+        with self.engine.connect() as connection:
+            result = connection.execute(query)
+            columns = result.keys()
+            rows = result.fetchall()
+            df = pl.DataFrame(rows, schema=columns)
+
+        print("Esquema do DataFrame:", df.schema)  # Depuração do esquema
         print(df.head())
-        df = df.map(lambda x: None if isinstance(x, float) and np.isnan(x) else x)
-        for col in df.select_dtypes(include=['datetime64']):
-            df[col] = df[col].astype(str)
-        df = df.applymap(lambda x: list(x) if isinstance(x, set) else x)
-        return df.fillna("null").to_dict(orient='records')
+                
+        # Tratar colunas datetime (convertendo para string)
+        for col in df.select(pl.col(pl.Datetime)).columns:
+            df = df.with_columns(pl.col(col).dt.strftime("%Y-%m-%d %H:%M:%S").alias(col))
+
+        # Retornar os dados como lista de dicionários
+        return df.fill_null("N/A").to_dicts()

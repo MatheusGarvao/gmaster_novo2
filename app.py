@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, session
+from flask import Flask, render_template, request, jsonify
 from flask_session import Session
 import pandas as pd
 import os
@@ -9,16 +9,15 @@ import chardet
 import re
 import zipfile
 from database_manager import DatabaseConnectionManager
-
-from flask import Flask, request, jsonify, render_template
 from conector import process_zip, process_excel, process_json, process_xml, process_csv
-
-
 
 app = Flask(__name__, template_folder="templates")
 
 db_manager = DatabaseConnectionManager()
 
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 @app.route('/database', methods=['POST'])
 def handle_database_request():
@@ -56,10 +55,6 @@ def handle_database_request():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Erro inesperado: {str(e)}"}), 500
-
-@app.route('/')
-def index():
-    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
