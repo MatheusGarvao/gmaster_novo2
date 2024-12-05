@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_file, session
 from flask_session import Session
 import pandas as pd
-import redis
 import os
 import numpy as np
 import xml.etree.ElementTree as ET
@@ -11,81 +10,15 @@ import re
 import zipfile
 from database_manager import DatabaseConnectionManager
 
+from flask import Flask, request, jsonify, render_template
+from conector import process_zip, process_excel, process_json, process_xml, process_csv
+
 
 
 app = Flask(__name__, template_folder="templates")
-app.secret_key = os.urandom(24)
 
-# app.config['SESSION_TYPE'] = 'redis'
-# app.config['SESSION_PERMANENT'] = False
-# app.config['SESSION_USE_SIGNER'] = True  # Para assinar cookies
-# app.config['SESSION_REDIS'] = redis.StrictRedis(host='localhost', port=6379, db=0)
-
-# Session(app)
-
-# Instância global do gerenciador de banco de dados
 db_manager = DatabaseConnectionManager()
 
-# @app.route('/check_session', methods=['GET'])
-# def check_session():
-#     # Obtém o histórico diretamente da sessão
-#     history = session.get('history', [])
-    
-#     # Verifique se o histórico foi inicializado
-#     if history:
-#         print("Histórico encontrado:", history)
-#     else:
-#         print("Nenhum histórico encontrado na sessão.")
-    
-#     # Retorna o histórico como JSON
-#     return jsonify(history)
-
-
-# @app.before_request
-# def ensure_history_initialized():
-#     print("Verificando a inicialização do histórico...")
-#     if 'history' not in session:
-#         print("Inicializando histórico na sessão.")
-#         session['history'] = []  # Inicializa o histórico
-#     else:
-#         print(f"Histórico existente na sessão: {session['history']}")
-
-# def initialize_history():
-#     if 'history' not in session:
-#         print("Iniciando sessão de histórico")
-#         session['history'] = []
-#     else:
-#         print("Sessão de histórico ja iniciada")
-
-# def save_state(df, operation):
-#     # Verifique se o 'history' existe na sessão
-#     if 'history' not in session:
-#         print("Inicializando 'history' na sessão...")
-#         session['history'] = []  # Iniciar o histórico, se não existir
-#     print(f'Salvando operação no histórico: {operation}')
-#     # Salvar o estado
-#     session['history'].append({
-#         'data': df.to_dict(orient='records'),
-#         'operation': operation
-#     })
-#     session.modified = True  # Garante que a sessão seja marcada como modificada
-
-# @app.route('/get_history', methods=['GET'])
-# def get_history():
-#     return jsonify(session.get('history', []))
-
-# @app.route('/undo', methods=['POST'])
-# def undo():
-#     history = session.get('history', [])
-#     if len(history) > 1:
-#         history.pop()  # Remove a última operação
-#         session['history'] = history
-#         last_state = history[-1]['data']  # Obtém o estado anterior
-#         global df
-#         df = pd.DataFrame(last_state)  # Restaura o DataFrame
-#         return jsonify(last_state)
-#     return jsonify({"error": "Nenhuma operação para desfazer"}), 400
-    
 
 @app.route('/database', methods=['POST'])
 def handle_database_request():
@@ -130,181 +63,30 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global df
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files['file']
-
     try:
-        # Verifica se é um arquivo .zip
         if file.filename.endswith('.zip'):
-            print("Tentando processar um arquivo ZIP...")
-            with zipfile.ZipFile(BytesIO(file.read()), 'r') as zip_ref:
-                zip_ref.extractall('extracted_files')
-                print("Arquivos extraídos com sucesso.")
-
-            # Processar arquivos dentro do .zip
-            extracted_files = os.listdir('extracted_files')
-            data = []
-            for extracted_file in extracted_files:
-                file_path = os.path.join('extracted_files', extracted_file)
-                if extracted_file.endswith('.xlsx'):
-                    print(f"Tentando ler o arquivo XLSX dentro do ZIP: {extracted_file}...")
-                    df = pd.read_excel(file_path)
-                    for col in df.select_dtypes(include=['datetime']):
-                        df[col] = df[col].astype(str)
-                    data.extend(df.to_dict(orient='records'))
-                    print(f"Arquivo XLSX {extracted_file} lido com sucesso.")
-
-                elif extracted_file.endswith('.json'):
-                    print(f"Tentando ler o arquivo JSON dentro do ZIP: {extracted_file}...")
-                    try:
-                        with open(file_path, 'r') as f:
-                            file_data = json.load(f)
-                            if isinstance(file_data, list) and all(isinstance(item, dict) for item in file_data):
-                                data.extend(file_data)
-                                print(f"Arquivo JSON {extracted_file} lido com sucesso.")
-                            else:
-                                print(f"Estrutura de JSON inesperada no arquivo {extracted_file}. Esperado: lista de dicionários.")
-                                return jsonify({"error": f"Formato de JSON inválido no arquivo {extracted_file}. Esperado uma lista de objetos."}), 400
-                    except json.JSONDecodeError as e:
-                        print(f"Erro de decodificação JSON no arquivo {extracted_file}: {e}")
-                        return jsonify({"error": f"Erro ao decodificar o arquivo JSON {extracted_file}."}), 400
-
-                elif extracted_file.endswith('.xml'):
-                    print(f"Tentando ler o arquivo XML dentro do ZIP: {extracted_file}...")
-                    import xml.etree.ElementTree as ET
-                    tree = ET.parse(file_path)
-                    root = tree.getroot()
-                    xml_data = [{child.tag: child.text for child in elem} for elem in root]
-                    data.extend(xml_data)
-                    print(f"Arquivo XML {extracted_file} lido com sucesso.")
-
-                elif extracted_file.endswith('.csv'):
-                    print(f"Tentando ler o arquivo CSV dentro do ZIP: {extracted_file}...")
-                    with open(file_path, 'rb') as f:
-                        raw_data = f.read()
-                        result = chardet.detect(raw_data)
-                        encoding = result['encoding']
-                        print(f'Codificação detectada para {extracted_file}: {encoding}')
-
-                        content = raw_data.decode(encoding, errors='replace')
-                        df = pd.read_csv(StringIO(content), sep=None, on_bad_lines='skip', quotechar='"', skipinitialspace=True)
-                        print(df.head())
-                        df = df.where(pd.notnull(df), 'N/A')
-                        data.extend(df.to_dict(orient='records'))
-                        print(f"Arquivo CSV {extracted_file} lido com sucesso.")
-
-                else:
-                    print(f"Tipo de arquivo {extracted_file} não suportado dentro do ZIP.")
-                    return jsonify({"error": f"Tipo de arquivo {extracted_file} não suportado dentro do ZIP."}), 400
-
-            # Limpa a pasta temporária de extração
-            for extracted_file in extracted_files:
-                os.remove(os.path.join('extracted_files', extracted_file))
-            os.rmdir('extracted_files')
-
+            data = process_zip(file)
         elif file.filename.endswith('.xlsx'):
-            print("Tentando ler o arquivo XLSX...")
-            df = pd.read_excel(BytesIO(file.read()))
-            for col in df.select_dtypes(include=['datetime']):
-                df[col] = df[col].astype(str)
-            data = df.to_dict(orient='records')
-            print("Arquivo XLSX lido com sucesso.")
-
+            data = process_excel(file)
         elif file.filename.endswith('.json'):
-            print("Tentando ler o arquivo JSON...")
-            try:
-                data = json.load(file)
-                if isinstance(data, list) and all(isinstance(item, dict) for item in data):
-                    print("Arquivo JSON lido com sucesso.")
-                    df = pd.DataFrame(data)
-                else:
-                    print("Estrutura de JSON inesperada. Esperado: lista de dicionários.")
-                    return jsonify({"error": "Formato de JSON inválido. Esperado uma lista de objetos."}), 400
-            except json.JSONDecodeError as e:
-                print(f"Erro de decodificação JSON: {e}")
-                return jsonify({"error": "Erro ao decodificar o arquivo JSON."}), 400
-
+            data = process_json(file)
         elif file.filename.endswith('.xml'):
-            print("Tentando ler o arquivo XML...")
-            try:
-                # Lê o XML diretamente como DataFrame
-                df = pd.read_xml(BytesIO(file.read()))
-
-                # Exibe as primeiras linhas
-                print("Primeiras linhas do DataFrame:")
-                print(df.head())
-                
-                # Preenche valores nulos e converte para dicionário
-                data = df.fillna("null").to_dict(orient='records')
-                print("Arquivo XML lido com sucesso.")
-            except ValueError as e:
-                print(f"Erro ao processar o arquivo XML com Pandas: {e}")
-                data = []
-
+            data = process_xml(file)
         elif file.filename.endswith('.csv'):
-            print("Tentando ler o arquivo CSV...")
-            raw_data = file.read()
-            result = chardet.detect(raw_data)
-            encoding = result['encoding']
-            print(f'Codificação detectada: {encoding}')
-
-            content = raw_data.decode(encoding, errors='replace')
-            df = pd.read_csv(StringIO(content), sep=None, on_bad_lines='skip', quotechar='"', skipinitialspace=True)
-            
-            print(df.head())
-            # initialize_history()
-            # save_state(df, "Arquivo carregado")
-
-            data = df.fillna("null").to_dict(orient='records')
-            print("Arquivo CSV lido com sucesso.")
-            
-        elif file.filename.endswith('.txt'):
-            try:
-                print("Tentando ler o arquivo TXT...")
-                # Lê o arquivo como um DataFrame, ignorando a coluna inicial e final (delimitadores vazios)
-                df = pd.read_csv(BytesIO(file.read()), sep='|', header=None, engine='python')
-                
-                # Remove as colunas vazias (delimitadores extras no início e fim)
-                df = df.iloc[:, 1:-1]
-
-                # Exibe as primeiras linhas para depuração
-                print("Primeiras linhas do DataFrame:")
-                print(df.head())
-                data = df.fillna("null").to_dict(orient='records')
-                print("Arquivo XML lido com sucesso.")
-                
-                
-            except Exception as e:
-                print(f"Erro ao processar o arquivo TXT: {e}")
-                return None
-
+            data = process_csv(file)
         else:
-            print("Tipo de arquivo não suportado.")
             return jsonify({"error": "File type not supported"}), 400
-        
+
         return jsonify(data)
 
     except Exception as e:
         print(f"Erro ao processar o arquivo: {e}")
         return jsonify({"error": f"Failed to process the file: {str(e)}"}), 500
     
-@app.route('/clean_data', methods=['POST'])
-def clean_data():
-    global df
-    try:
-        data = request.get_json().get("data", [])
-        if not data:
-            return jsonify({"error": "Nenhum dado para limpar."}), 400
-
-        cleaned_data = [row for row in data if all(value.strip() for value in row.values())]
-
-        return jsonify(cleaned_data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/calcular_nova_coluna', methods=['POST'])
 def calcular_nova_coluna():
     global df   
