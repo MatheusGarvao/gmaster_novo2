@@ -1,19 +1,19 @@
 from flask import Flask, render_template, request, jsonify
-from flask_session import Session
-import pandas as pd
-import os
-import numpy as np
-import xml.etree.ElementTree as ET
-from io import StringIO, BytesIO
-import chardet
-import re
-import zipfile
 from database_manager import DatabaseConnectionManager
-from conector import process_zip, process_excel, process_json, process_xml, process_csv
+from functions import (
+    replace_value,
+    transpor,
+    rename_column,
+    calcular_nova_coluna,   
+)
+from database_manager import DatabaseConnectionManager
+from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe
 
 app = Flask(__name__, template_folder="templates")
 
 db_manager = DatabaseConnectionManager()
+
+global_df = None  
 
 @app.route('/')
 def index():
@@ -58,148 +58,60 @@ def handle_database_request():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+    global global_df  
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
-    file = request.files['file']
     try:
         if file.filename.endswith('.zip'):
-            data = process_zip(file)
-        elif file.filename.endswith('.xlsx'):
-            data = process_excel(file)
-        elif file.filename.endswith('.json'):
-            data = process_json(file)
-        elif file.filename.endswith('.xml'):
-            data = process_xml(file)
+            data = process_zip(file)  # Processa arquivos ZIP
         elif file.filename.endswith('.csv'):
-            data = process_csv(file)
+            data = process_csv(file)  # Processa arquivos CSV
+        elif file.filename.endswith('.json'):
+            data = process_json(file)  # Processa arquivos JSON
+        elif file.filename.endswith('.xml'):
+            data = process_xml(file)  # Processa arquivos XML
+        elif file.filename.endswith('.xlsx'):
+            data = process_excel(file)  # Processa arquivos Excel
         else:
-            return jsonify({"error": "File type not supported"}), 400
+            return jsonify({"error": "Formato de arquivo não suportado."}), 400
 
-        return jsonify(data)
-
+        # Converte os dados processados para DataFrame Polars
+        global_df = load_dataframe(data)
+        return jsonify({
+            "message": "Dados carregados com sucesso.",
+            "data": data  # Dados processados do arquivo
+        }), 200
     except Exception as e:
-        print(f"Erro ao processar o arquivo: {e}")
-        return jsonify({"error": f"Failed to process the file: {str(e)}"}), 500
-    
-@app.route('/calcular_nova_coluna', methods=['POST'])
-def calcular_nova_coluna():
-    global df   
-    data = request.json
-    print(data.get('formula'))
-    print(data.get('new_column'))
-    df= pd.DataFrame(data['data'])
-    formula = data.get('formula')
-    new_column_name = data.get('new_column')
-    print(formula)
-
-    if not formula:
-        return jsonify({"error": "Fórmula não fornecida"}), 400
-    if not new_column_name:
-        new_column_name = f"{formula} (Nova)"
-
-    # Substituir os nomes das colunas por df['coluna']
-    for col in df.columns:
-        if col in formula:
-            # Converter a coluna para tipo numérico, substituindo erros por NaN
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            formula = formula.replace(col, f"df['{col}']")
-    
-    try:
-        # Avaliar a fórmula
-        df[new_column_name] = eval(formula)
-
-        # Converter NaN para "null" para compatibilidade JSON
-        data = df.fillna("null").to_dict(orient='records')
-        return jsonify(data)
-    except Exception as e:
-        print("Erro ao aplicar fórmula:", str(e))
         return jsonify({"error": str(e)}), 500
-    
+
+@app.route('/replace_value', methods=['POST'])    
+def handle_replace_value():
+    global global_df
+    response = replace_value(global_df, request)
+     
+    return response
 
 @app.route('/transpor', methods=['POST'])
-def transpor():
-    global df
-    try:
-        data = request.get_json()
-        
-        if 'data' not in data:
-            return jsonify({"error": "Dados não fornecidos."}), 400
-        
-        # Cria um DataFrame a partir dos dados recebidos
-        df = pd.DataFrame(data['data'])
-        
-        columns_as_first_row = pd.DataFrame([df.columns.tolist()], columns=df.columns)
-        
-        # Adiciona os nomes das colunas como a primeira linha
-        df = pd.concat([columns_as_first_row, df], ignore_index=True)
-        
-        df_transposto = df.T
-        result = df_transposto.to_dict(orient='records')
-        return jsonify(result)
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def handle_transpor():
+    global global_df
+    response = transpor(global_df, request)
+    
+    return response
 
 @app.route('/rename_column', methods=['POST'])
-def rename_column():
-    global df
-    data = request.json
-    current_column = data.get('currentColumn')
-    new_column_name = data.get('newColumnName')
-    df = pd.DataFrame(data['rawData'])
+def handle_rename_column():
+    global global_df
+    response = rename_column(global_df, request)
+    return response
 
-    if not current_column or not new_column_name:
-        return jsonify({"error": "Nome atual e novo nome são necessários."}), 400
-
-    # Verifique se a coluna atual existe no DataFrame
-    if current_column not in df.columns:
-        return jsonify({"error": f"A coluna '{current_column}' não existe."}), 400
-
-    # Renomeia a coluna
-    df.rename(columns={current_column: new_column_name}, inplace=True)
-    # save_state(df, f"Renomeou coluna '{current_column}' para '{new_column_name}'")
-    print(df.head())
-    # Retorne o DataFrame atualizado
-    data = df.fillna("null").to_dict(orient='records')
-    return jsonify(data)
-
-@app.route('/replace_value', methods=['POST'])
-def replace_value():
-    global df
-    data = request.json
-    column = data.get('column')
-    old_value = data.get('oldValue')
-    new_value = data.get('newValue')
-    df = pd.DataFrame(data['data'])
-    print(column, old_value, new_value)
-
-    # Verifica se os parâmetros estão presentes
-    if not column or old_value is None or new_value is None:
-        return jsonify({"error": "Parâmetros incompletos"}), 400
-
-    try:
-        # Converte os valores para numéricos (inteiros ou flutuantes)
-        old_value = float(old_value)
-        new_value = float(new_value)
-
-        # Converte a coluna para tipo numérico antes de substituir os valores
-        df[column] = pd.to_numeric(df[column], errors='coerce')
-
-        # Substitui o valor antigo pelo novo
-        df[column] = df[column].replace(old_value, new_value)
-
-        print(df.head())
-        
-        # Preenche valores NaN com "null" para compatibilidade JSON
-        updated_data = df.fillna("null").to_dict(orient='records')
-        return jsonify(updated_data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
+@app.route('/calcular_nova_coluna', methods=['POST'])
+def handle_calcular_nova_coluna():
+    global global_df
+    response = calcular_nova_coluna(global_df, request)
+    
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)
-    
-    

@@ -102,3 +102,7 @@ def process_csv(file):
     df = pl.read_csv(StringIO(content), separator=sep)
     return df.fill_null("N/A").to_dicts()
 
+def load_dataframe(data):
+    """Converte a lista de dicionários para um DataFrame Polars"""
+    return pl.DataFrame(data)
+

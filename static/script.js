@@ -26,43 +26,6 @@ function initializeTable(data) {
     });
 }
 
-
-function updateHistory(operation) {
-    const historyList = document.getElementById('historyList');
-    const newItem = document.createElement('li');
-    newItem.textContent = operation;
-    historyList.appendChild(newItem);
-}
-
-function fetchHistory() {
-    fetch('/get_history')
-        .then(response => response.json())
-        .then(data => {
-            const historyList = document.getElementById('historyList');
-            historyList.innerHTML = '';
-            data.forEach(item => {
-                const listItem = document.createElement('li');
-                listItem.textContent = item.operation;
-                historyList.appendChild(listItem);
-            });
-        });
-}
-
-function undoLastOperation() {
-    fetch('/undo', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert(data.error);
-            } else {
-                // Atualiza a tabela com o estado anterior
-                initializeTable(data);
-                fetchHistory();
-            }
-        });
-}
-
-
 async function uploadFile() {
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
@@ -85,8 +48,14 @@ async function uploadFile() {
             throw new Error("Erro no upload do arquivo.");
         }
 
-        rawData = await response.json();
-        initializeTable(rawData);
+        const rawData = await response.json();
+
+        // Verifica se os dados foram retornados
+        if (rawData && rawData.data) {
+            initializeTable(rawData.data);  // Chama a função para exibir os dados
+        } else {
+            alert("Nenhum dado foi retornado.");
+        }
     } catch (error) {
         console.error("Erro:", error);
         alert("Falha ao ler o arquivo.");
