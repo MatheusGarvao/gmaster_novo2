@@ -22,7 +22,7 @@ def replace_value(global_df, request):
         new_value = float(new_value)
 
         # Substitui o valor na coluna especificada e retorna o DataFrame atualizado
-        updated_df = global_df.with_column(
+        updated_df = global_df.with_columns(
             pl.when(pl.col(column) == old_value)
             .then(new_value)
             .otherwise(pl.col(column))
@@ -90,7 +90,7 @@ def calcular_nova_coluna(global_df, request):
                 formula = formula.replace(col, f"global_df['{col}']")
 
         # Avalia a fórmula e adiciona uma nova coluna
-        global_df = global_df.with_column(eval(formula).alias(new_column_name))
+        global_df = global_df.with_columns(eval(formula).alias(new_column_name))
         return jsonify(global_df.to_dicts())
     except Exception as e:
         return jsonify({"error": str(e)}), 500

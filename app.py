@@ -21,6 +21,7 @@ def index():
 
 @app.route('/database', methods=['POST'])
 def handle_database_request():
+    global global_df
     try:
         data = request.json
         if not data:
@@ -45,6 +46,7 @@ def handle_database_request():
             if not table_name:
                 return jsonify({"error": "Nome da tabela não fornecido."}), 400
             data = db_manager.load_table_data(table_name)
+            global_df = load_dataframe(data)
             return jsonify({
                 "message": f"Dados carregados com sucesso da tabela '{table_name}'",
                 "data": data,
@@ -90,7 +92,7 @@ def upload_file():
 def handle_replace_value():
     global global_df
     response = replace_value(global_df, request)
-     
+    
     return response
 
 @app.route('/transpor', methods=['POST'])

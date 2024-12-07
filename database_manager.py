@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.sql import text
 import polars as pl
 import numpy as np
+import logging
 
 class DatabaseConnectionManager:
     def __init__(self):
@@ -46,16 +47,22 @@ class DatabaseConnectionManager:
             'port': os.getenv('DB_PORT'),
             'database': os.getenv('DB_NAME')
         }
+        
         return config, db_config['connection_string']
     
     def configure_connection(self, db_type: str):
         """Configura a conexão com o banco de dados."""
-        config, connection_string = self.load_db_config(db_type)
-        if db_type == 'sqlite':
-            self.engine = create_engine(connection_string.format(database=config['database']))
-        else:
-            self.engine = create_engine(connection_string.format(**config))
-        self.current_db_type = db_type
+        try:
+            config, connection_string = self.load_db_config(db_type)
+            if db_type == 'sqlite':
+                self.engine = create_engine(connection_string.format(database=config['database']))
+            else:
+                self.engine = create_engine(connection_string.format(**config))
+            self.current_db_type = db_type
+            logging.info(f"Conexão configurada com sucesso para o banco de dados: {db_type}")
+        except Exception as e:
+            logging.error(f"Erro ao configurar conexão: {e}")
+            raise
     
     def load_table_data(self, table_name: str):
         """Carrega os dados de uma tabela do banco configurado."""
