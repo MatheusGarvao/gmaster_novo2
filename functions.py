@@ -95,7 +95,7 @@ def calcular_nova_coluna(global_df, request):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-def aplicar_operacoes_api(global_df, request):
+def sumarizar(global_df, request):
     """
     Função para aplicar operações de agregação via API com Polars
     """

@@ -311,7 +311,7 @@ function carregarBancoDeDados() {
     });
 }
 
-async function aplicarOperacoes() {
+async function sumarizar() {
     try {
         // Obter valores dos campos de entrada
         const colunaAgrupamento = document.getElementById('agrupamentoInput').value;
@@ -335,7 +335,7 @@ async function aplicarOperacoes() {
         };
 
         // Enviar a requisição POST
-        const response = await fetch('/aplicar_operacoes', {
+        const response = await fetch('/sumarizar', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

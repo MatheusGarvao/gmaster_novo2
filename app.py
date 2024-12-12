@@ -5,7 +5,7 @@ from functions import (
     transpor,
     rename_column,
     calcular_nova_coluna,
-    aplicar_operacoes_api   
+    sumarizar   
 )
 from database_manager import DatabaseConnectionManager
 from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe
@@ -116,10 +116,10 @@ def handle_calcular_nova_coluna():
     
     return response
 
-@app.route('/aplicar_operacoes', methods=['POST'])
-def handle_aplicar_operacoes():
+@app.route('/sumarizar', methods=['POST'])
+def handle_sumarizar():
     global global_df
-    response = aplicar_operacoes_api(global_df, request)
+    response = sumarizar(global_df, request)
     return response
 
 if __name__ == '__main__':
