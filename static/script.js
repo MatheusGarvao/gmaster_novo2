@@ -311,3 +311,56 @@ function carregarBancoDeDados() {
     });
 }
 
+async function aplicarOperacoes() {
+    try {
+        // Obter valores dos campos de entrada
+        const colunaAgrupamento = document.getElementById('agrupamentoInput').value;
+        const colunaOperacoes = document.getElementById('colunaOperacoesInput').value;
+        const operacoesStr = document.getElementById('operacoesInput').value;
+
+        // Validar campos de entrada
+        if (!colunaAgrupamento || !colunaOperacoes || !operacoesStr) {
+            throw new Error('Todos os campos são obrigatórios.');
+        }
+
+        // Processar operações
+        const operacoes = operacoesStr.split(',').map(op => op.trim());
+
+        // Estruturar dados para a requisição
+        const data = {
+            agrupamento: [colunaAgrupamento],
+            operacoes: {
+                [colunaOperacoes]: operacoes
+            }
+        };
+
+        // Enviar a requisição POST
+        const response = await fetch('/aplicar_operacoes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        // Verificar se a requisição foi bem-sucedida
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Erro: ${errorData.error}`);
+        }
+
+        // Obter os dados da resposta
+        const resultado = await response.json();
+        console.log('Resultado das operações:', resultado);
+        initializeTable(resultado);
+
+
+    } catch (error) {
+        console.error('Erro ao aplicar operações:', error);
+    }
+}
+
+
+
+    
+

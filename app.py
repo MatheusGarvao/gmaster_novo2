@@ -4,7 +4,8 @@ from functions import (
     replace_value,
     transpor,
     rename_column,
-    calcular_nova_coluna,   
+    calcular_nova_coluna,
+    aplicar_operacoes_api   
 )
 from database_manager import DatabaseConnectionManager
 from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe
@@ -113,6 +114,12 @@ def handle_calcular_nova_coluna():
     global global_df
     response = calcular_nova_coluna(global_df, request)
     
+    return response
+
+@app.route('/aplicar_operacoes', methods=['POST'])
+def handle_aplicar_operacoes():
+    global global_df
+    response = aplicar_operacoes_api(global_df, request)
     return response
 
 if __name__ == '__main__':

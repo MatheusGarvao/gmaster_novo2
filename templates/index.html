@@ -73,6 +73,22 @@
             </div>
         </div>
         
+        <!-- Novo formulário para agrupamento e operações -->
+        <div class="sidebar-section">
+            <h3>Aplicar Operações</h3>
+            <label for="agrupamentoInput">Coluna de Agrupamento:</label>
+            <input type="text" id="agrupamentoInput" placeholder="Digite o nome da coluna de agrupamento">
+            <label for="colunaOperacoesInput">Coluna para Operações:</label>
+            <input type="text" id="colunaOperacoesInput" placeholder="Digite o nome da coluna para operações">
+            <label for="operacoesInput">Operações:</label>
+            <input type="text" id="operacoesInput" placeholder="Digite as operações, e.g. sum,mean">
+            <div class="button-group">
+                <button class="btn-action" onclick="aplicarOperacoes()">Aplicar</button>
+                <button class="btn-cancel" onclick="closeOperacoesModal()">Cancelar</button>
+            </div>
+        </div>
+        
+        
         
     </aside>
 

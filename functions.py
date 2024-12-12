@@ -94,3 +94,52 @@ def calcular_nova_coluna(global_df, request):
         return jsonify(global_df.to_dicts())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+def aplicar_operacoes_api(global_df, request):
+    """
+    Função para aplicar operações de agregação via API com Polars
+    """
+    try:
+        # Receber dados da requisição
+        data = request.json
+        
+        # Extrair parâmetros
+        agrupamento = data.get('agrupamento', [])
+        operacoes_escolhidas = data.get('operacoes', {})
+        
+        # Validar entrada
+        if not agrupamento:
+            return jsonify({"error": "Coluna de agrupamento não fornecida"}), 400
+        
+        # Mapear operações
+        mapeamento_operacoes = {
+            'sum': lambda col: pl.col(col).sum(),
+            'mean': lambda col: pl.col(col).mean(),
+            'median': lambda col: pl.col(col).median(),
+            'min': lambda col: pl.col(col).min(),
+            'max': lambda col: pl.col(col).max(),
+            'count': lambda col: pl.col(col).count(),
+            'std': lambda col: pl.col(col).std(),
+            'first': lambda col: pl.col(col).first(),
+            'last': lambda col: pl.col(col).last()
+        }
+        
+        # Preparar as agregações
+        agregacoes = []
+        for coluna, lista_operacoes in operacoes_escolhidas.items():
+            for operacao in lista_operacoes:
+                if operacao not in mapeamento_operacoes:
+                    return jsonify({"error": f"Operação {operacao} não suportada"}), 400
+                agregacoes.append(
+                    mapeamento_operacoes[operacao](coluna).alias(f"{coluna}_{operacao}")
+                )
+        
+        # Realizar o agrupamento e agregação
+        resultado = global_df.group_by(agrupamento).agg(agregacoes)
+        print(resultado.head())
+        
+        # Converter para dicionário para resposta JSON
+        return jsonify(resultado.to_dicts())
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
