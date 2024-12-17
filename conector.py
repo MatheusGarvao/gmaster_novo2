@@ -2,6 +2,8 @@ import os
 import csv
 import json
 import zipfile
+import re
+import pandas as pd
 from io import BytesIO, StringIO
 import polars as pl
 import chardet
@@ -49,6 +51,10 @@ def process_zip(file):
 
                 elif file_name.endswith('.xlsx'):
                     data.extend(process_excel(file_path))
+                    
+                elif file_name.endswith('.txt'):
+                    with open(file_path, 'rb') as f:
+                        data.extend(process_txt(f))    
 
                 else:
                     print(f"Formato de arquivo desconhecido: {file_name}")
@@ -106,3 +112,56 @@ def load_dataframe(data):
     """Converte a lista de dicionários para um DataFrame Polars"""
     return pl.DataFrame(data)
 
+
+import polars as pl
+import re
+
+def process_txt(file):
+    """
+    Processa um arquivo .txt, filtrando apenas as linhas que começam com '|'
+    e descartando todo o conteúdo após o início de blocos inválidos.
+    """
+    try:
+        # Lê o conteúdo do arquivo ignorando caracteres inválidos
+        raw_data = file.read().decode('utf-8', errors='replace')
+        
+        # Lista para armazenar linhas válidas
+        filtered_lines = []
+
+        # Itera pelas linhas, adicionando somente as válidas
+        for line in raw_data.splitlines():
+            if line.strip().startswith('|'):
+                filtered_lines.append(line)
+            elif not line.strip():
+                continue  # Ignora linhas em branco
+            else:
+                # Condição para parar ao encontrar um bloco inválido
+                if not re.match(r'^[\w| ]+$', line.strip()):
+                    print(f"Descartando bloco inválido: {line[:30]}...")
+                    break
+
+        # Verifica se há linhas válidas
+        if not filtered_lines:
+            raise ValueError("Nenhuma linha válida encontrada no arquivo.")
+
+        # Junta as linhas válidas para processar como uma tabela
+        content = "\n".join(filtered_lines)
+        print("Linhas filtradas:")
+        print(content[:5000])  # Depuração: mostra as linhas válidas antes do processamento
+
+        # Lê as linhas usando Polars
+        df = pl.read_csv(
+            StringIO(content),  # Passa como StringIO para simular um arquivo
+            separator='|',
+            infer_schema_length=5000000,
+            has_header=False,
+            ignore_errors=True,
+            truncate_ragged_lines=True
+        )
+
+        # Preenche valores nulos e retorna como lista de dicionários
+        return df.fill_null("N/A").to_dicts()
+
+    except Exception as e:
+        print(f"Erro ao processar o arquivo .txt: {str(e)}")  # Detalhamento do erro
+        raise RuntimeError(f"Erro ao processar o arquivo .txt: {str(e)}")

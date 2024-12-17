@@ -8,7 +8,7 @@ from functions import (
     sumarizar   
 )
 from database_manager import DatabaseConnectionManager
-from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe
+from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe, process_txt
 
 app = Flask(__name__, template_folder="templates")
 
@@ -77,6 +77,8 @@ def upload_file():
             data = process_xml(file)  # Processa arquivos XML
         elif file.filename.endswith('.xlsx'):
             data = process_excel(file)  # Processa arquivos Excel
+        elif file.filename.endswith('.txt'):
+            data = process_txt(file)
         else:
             return jsonify({"error": "Formato de arquivo não suportado."}), 400
 
