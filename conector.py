@@ -3,7 +3,6 @@ import csv
 import json
 import zipfile
 import re
-import pandas as pd
 from io import BytesIO, StringIO
 import polars as pl
 import chardet

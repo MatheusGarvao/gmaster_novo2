@@ -25,6 +25,7 @@
             <li onclick="toggleModal('renameColumnModal')"><i class="fas fa-edit"></i> Renomear Colunas</li>
             <li onclick="toggleModal('formula_container')"><i class="fas fa-edit"></i> Criar Coluna Calculada</li>
             <li onclick="toggleModal('replaceValueModal')"><i class="fas fa-exchange-alt"></i> Substituir Valores</li>
+            <li onclick="toggleModal('weightedAverageModal')"><i class="fas fa-calculator"></i> Média Ponderada</li>
             <li onclick="preencherValores()"><i class="fas fa-fill-drip"></i> Preencher Valores</li>
             <li onclick="colunaDinamica()"><i class="fas fa-plus-circle"></i> Coluna Dinâmica</li>
             <li onclick="converterEmLista()"><i class="fas fa-list"></i> Converter em Lista</li>
@@ -87,8 +88,20 @@
                 <button class="btn-cancel" onclick="closeOperacoesModal()">Cancelar</button>
             </div>
         </div>
-        
-        
+
+        <div class="sidebar-section" id="weightedAverageModal" style="display: none;">
+            <h3>Calcular Média Ponderada</h3>
+            <label for="valueColumn">Coluna de Valores:</label>
+            <input type="text" id="valueColumn" placeholder="Digite o nome da coluna de valores">
+            <label for="weightColumn">Coluna de Pesos:</label>
+            <input type="text" id="weightColumn" placeholder="Digite o nome da coluna de pesos">
+            <label for="outputColumn">Nome da Nova Coluna:</label>
+            <input type="text" id="outputColumn" placeholder="Nome da coluna de saída">
+            <div class="button-group">
+                <button class="btn-action" onclick="calcularMediaPonderada()">Calcular</button>
+                <button class="btn-cancel" onclick="closeWeightedAverageModal()">Cancelar</button>
+            </div>
+        </div>   
         
     </aside>
 

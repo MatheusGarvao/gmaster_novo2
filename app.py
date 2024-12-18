@@ -5,7 +5,8 @@ from functions import (
     transpor,
     rename_column,
     calcular_nova_coluna,
-    sumarizar   
+    sumarizar,
+    calcular_media_ponderada   
 )
 from database_manager import DatabaseConnectionManager
 from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe, process_txt
@@ -94,22 +95,23 @@ def upload_file():
 @app.route('/replace_value', methods=['POST'])    
 def handle_replace_value():
     global global_df
-    response = replace_value(global_df, request)
-    
+    global_df, response = replace_value(global_df, request)
     return response
 
 @app.route('/transpor', methods=['POST'])
 def handle_transpor():
     global global_df
     response = transpor(global_df, request)
-    
     return response
 
 @app.route('/rename_column', methods=['POST'])
 def handle_rename_column():
     global global_df
-    response = rename_column(global_df, request)
-    return response
+    try:
+        global_df = rename_column(global_df, request)
+        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/calcular_nova_coluna', methods=['POST'])
 def handle_calcular_nova_coluna():
@@ -122,6 +124,12 @@ def handle_calcular_nova_coluna():
 def handle_sumarizar():
     global global_df
     response = sumarizar(global_df, request)
+    return response
+
+@app.route('/calcular_media_ponderada', methods=['POST'])
+def handle_media_ponderada():
+    global global_df
+    response = calcular_media_ponderada(global_df, request)
     return response
 
 if __name__ == '__main__':

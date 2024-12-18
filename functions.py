@@ -65,9 +65,8 @@ def rename_column(global_df, request):
 
     try:
         # Renomeia a coluna no DataFrame Polars
-        updated_df = global_df.rename({current_column: new_column_name})
-        global_df = updated_df
-        return jsonify(global_df.to_dicts())
+        global_df = global_df.rename({current_column: new_column_name})
+        return global_df
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -110,6 +109,18 @@ def sumarizar(global_df, request):
         # Validar entrada
         if not agrupamento:
             return jsonify({"error": "Coluna de agrupamento não fornecida"}), 400
+        if not isinstance(agrupamento, list):
+            agrupamento = [agrupamento]
+
+        # Validar colunas de agrupamento
+        for col in agrupamento:
+            if col not in global_df.columns:
+                return jsonify({"error": f"Coluna de agrupamento '{col}' não encontrada"}), 400
+
+        # Validar colunas para operações
+        for coluna in operacoes_escolhidas.keys():
+            if coluna not in global_df.columns:
+                return jsonify({"error": f"Coluna '{coluna}' para operações não encontrada"}), 400
         
         # Mapear operações
         mapeamento_operacoes = {
@@ -141,5 +152,40 @@ def sumarizar(global_df, request):
         # Converter para dicionário para resposta JSON
         return jsonify(resultado.to_dicts())
     
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+def calcular_media_ponderada(global_df, request):
+    """
+    Calcula a média ponderada de um campo numérico com base em um campo de pesos.
+    """
+    data = request.json
+    valor_col = data.get("valor_col")  # Campo de valores
+    peso_col = data.get("peso_col")    # Campo de pesos
+    output_col = data.get("output_col", "Media_Ponderada")  # Nome do campo de saída
+
+    # Verificar se os campos necessários foram fornecidos
+    if not valor_col or not peso_col:
+        return jsonify({"error": "Campos 'valor_col' e 'peso_col' são obrigatórios."}), 400
+
+    try:
+        # Verificar se as colunas existem no DataFrame
+        if valor_col not in global_df.columns or peso_col not in global_df.columns:
+            return jsonify({"error": f"Uma ou mais colunas fornecidas não existem no DataFrame: {valor_col}, {peso_col}"}), 400
+
+        # Calcular a soma ponderada e a soma dos pesos
+        soma_ponderada = (global_df[valor_col] * global_df[peso_col]).sum()
+        soma_pesos = global_df[peso_col].sum()
+
+        if soma_pesos == 0:
+            return jsonify({"error": "A soma dos pesos é zero. Não é possível calcular a média ponderada."}), 400
+
+        # Calcular a média ponderada
+        media_ponderada = soma_ponderada / soma_pesos
+
+        # Adicionar o resultado ao DataFrame como uma nova coluna
+        global_df = global_df.with_columns(pl.lit(media_ponderada).alias(output_col))
+
+        return jsonify(global_df.to_dicts())
     except Exception as e:
         return jsonify({"error": str(e)}), 500

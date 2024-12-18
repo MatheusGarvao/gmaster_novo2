@@ -354,11 +354,60 @@ async function sumarizar() {
         console.log('Resultado das operações:', resultado);
         initializeTable(resultado);
 
-
     } catch (error) {
         console.error('Erro ao aplicar operações:', error);
+
+        // Exibir erro no frontend
+        alert(`Erro ao aplicar operações: ${error.message}`);
     }
 }
+
+async function calcularMediaPonderada() {
+    const valueColumn = document.getElementById('valueColumn').value;
+    const weightColumn = document.getElementById('weightColumn').value;
+    const outputColumn = document.getElementById('outputColumn').value || "Media_Ponderada"; // Nome padrão
+
+    console.log("Coluna de Valores:", valueColumn);
+    console.log("Coluna de Pesos:", weightColumn);
+    console.log("Coluna de Saída:", outputColumn);
+
+    // Validação
+    if (!valueColumn || !weightColumn) {
+        alert("Por favor, insira os nomes das colunas de valores e de pesos.");
+        return;
+    }
+
+    try {
+        // Enviar dados para o backend
+        const response = await fetch('http://127.0.0.1:5000/calcular_media_ponderada', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                valor_col: valueColumn,
+                peso_col: weightColumn,
+                output_col: outputColumn
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            rawData = result; // Atualiza os dados com a nova coluna
+            initializeTable(rawData); // Atualiza a tabela no frontend
+            closeWeightedAverageModal(); // Fecha o modal
+        } else {
+            const error = await response.json();
+            alert(`Erro: ${error.error}`);
+        }
+    } catch (error) {
+        console.error("Erro ao calcular a média ponderada:", error);
+        alert("Erro ao calcular a média ponderada. Verifique o console para mais detalhes.");
+    }
+}
+
+function closeWeightedAverageModal() {
+    document.getElementById('weightedAverageModal').style.display = 'none';
+}
+
 
 
 
