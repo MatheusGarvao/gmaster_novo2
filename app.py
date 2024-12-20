@@ -95,9 +95,14 @@ def upload_file():
 @app.route('/replace_value', methods=['POST'])    
 def handle_replace_value():
     global global_df
-    global_df, response = replace_value(global_df, request)
-    return response
-
+    try:
+        global_df, error = replace_value(global_df, request)
+        if error:  # Se houve um erro na função replace_value
+            return jsonify(error), 400
+        return jsonify(global_df.to_dicts()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 @app.route('/transpor', methods=['POST'])
 def handle_transpor():
     global global_df
@@ -108,7 +113,9 @@ def handle_transpor():
 def handle_rename_column():
     global global_df
     try:
-        global_df = rename_column(global_df, request)
+        global_df, error = rename_column(global_df, request)
+        if error:
+            return jsonify(error), 400
         return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
     except ValueError as e:
         return jsonify({"error": str(e)}), 500
@@ -116,21 +123,35 @@ def handle_rename_column():
 @app.route('/calcular_nova_coluna', methods=['POST'])
 def handle_calcular_nova_coluna():
     global global_df
-    response = calcular_nova_coluna(global_df, request)
-    
-    return response
-
+    try:
+        global_df, error = calcular_nova_coluna(global_df, request)
+        if error:
+            return jsonify(error), 400
+        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
+ 
 @app.route('/sumarizar', methods=['POST'])
 def handle_sumarizar():
     global global_df
-    response = sumarizar(global_df, request)
-    return response
+    try:
+        global_df, error = sumarizar(global_df, request)
+        if error:
+            return jsonify(error), 400
+        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/calcular_media_ponderada', methods=['POST'])
 def handle_media_ponderada():
     global global_df
-    response = calcular_media_ponderada(global_df, request)
-    return response
+    try:
+        global_df, error = calcular_media_ponderada(global_df, request)
+        if error:
+            return jsonify(error), 400
+        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

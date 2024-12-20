@@ -7,14 +7,14 @@ def load_dataframe(data):
     return pl.DataFrame(data)
 
 def replace_value(global_df, request):
-    """Substitui um valor por outro em uma coluna específica."""    
+    """Substitui um valor por outro em uma coluna específica."""
     data = request.json
     column = data.get("column")
     old_value = data.get("oldValue")
     new_value = data.get("newValue")
 
     if not column or old_value is None or new_value is None:
-        return jsonify({"error": "Parâmetros incompletos"}), 400
+        return None, {"error": "Parâmetros incompletos"}
 
     try:
         # Converte os valores para numéricos, se possível
@@ -28,10 +28,10 @@ def replace_value(global_df, request):
             .otherwise(pl.col(column))
             .alias(column)
         )
-        
-        return jsonify(updated_df.to_dicts())
+        return updated_df, None
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return None, {"error": str(e)}
+
 
 def transpor(global_df, request):
     """Transpõe os dados do DataFrame."""
@@ -65,10 +65,10 @@ def rename_column(global_df, request):
 
     try:
         # Renomeia a coluna no DataFrame Polars
-        global_df = global_df.rename({current_column: new_column_name})
-        return global_df
+        updated_df = global_df.rename({current_column: new_column_name})
+        return updated_df, None
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return None,{"error": str(e)}, 500
 
 
 def calcular_nova_coluna(global_df, request):
@@ -89,10 +89,10 @@ def calcular_nova_coluna(global_df, request):
                 formula = formula.replace(col, f"global_df['{col}']")
 
         # Avalia a fórmula e adiciona uma nova coluna
-        global_df = global_df.with_columns(eval(formula).alias(new_column_name))
-        return jsonify(global_df.to_dicts())
+        updated_df = global_df.with_columns(eval(formula).alias(new_column_name))
+        return updated_df, None
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return None,{"error": str(e)}, 500
     
 def sumarizar(global_df, request):
     """
@@ -124,17 +124,16 @@ def sumarizar(global_df, request):
         
         # Mapear operações
         mapeamento_operacoes = {
-            'sum': lambda col: pl.col(col).sum(),
-            'mean': lambda col: pl.col(col).mean(),
-            'median': lambda col: pl.col(col).median(),
-            'min': lambda col: pl.col(col).min(),
-            'max': lambda col: pl.col(col).max(),
-            'count': lambda col: pl.col(col).count(),
-            'std': lambda col: pl.col(col).std(),
-            'first': lambda col: pl.col(col).first(),
-            'last': lambda col: pl.col(col).last()
+            'soma': lambda col: pl.col(col).sum(),
+            'media': lambda col: pl.col(col).mean(),
+            'mediana': lambda col: pl.col(col).median(),
+            'minimo': lambda col: pl.col(col).min(),
+            'maximo': lambda col: pl.col(col).max(),
+            'contagem': lambda col: pl.col(col).count(),
+            'desvio_padrao': lambda col: pl.col(col).std(),
+            'primeiro': lambda col: pl.col(col).first(),
+            'ultimo': lambda col: pl.col(col).last()
         }
-        
         # Preparar as agregações
         agregacoes = []
         for coluna, lista_operacoes in operacoes_escolhidas.items():
@@ -146,11 +145,11 @@ def sumarizar(global_df, request):
                 )
         
         # Realizar o agrupamento e agregação
-        resultado = global_df.group_by(agrupamento).agg(agregacoes)
-        print(resultado.head())
+        updated_df = global_df.group_by(agrupamento).agg(agregacoes)
+        print(updated_df.head())
         
         # Converter para dicionário para resposta JSON
-        return jsonify(resultado.to_dicts())
+        return updated_df, None
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -184,8 +183,8 @@ def calcular_media_ponderada(global_df, request):
         media_ponderada = soma_ponderada / soma_pesos
 
         # Adicionar o resultado ao DataFrame como uma nova coluna
-        global_df = global_df.with_columns(pl.lit(media_ponderada).alias(output_col))
+        updated_df = global_df.with_columns(pl.lit(media_ponderada).alias(output_col))
 
-        return jsonify(global_df.to_dicts())
+        return updated_df, None
     except Exception as e:
         return jsonify({"error": str(e)}), 500
