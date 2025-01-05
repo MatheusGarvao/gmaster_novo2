@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
 from database_manager import DatabaseConnectionManager
 from functions import (
     replace_value,
@@ -154,4 +155,5 @@ def handle_media_ponderada():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    CORS(app, origins="http://localhost:3000")
     app.run(host='0.0.0.0', port=5000, debug=True)
