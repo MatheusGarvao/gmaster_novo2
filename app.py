@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+import os
+from werkzeug.utils import secure_filename
 from database_manager import DatabaseConnectionManager
 from functions import (
     replace_value,
@@ -16,7 +18,14 @@ app = Flask(__name__, template_folder="templates")
 
 db_manager = DatabaseConnectionManager()
 
-global_df = None  
+global_df = None
+
+UPLOAD_FOLDER = 'uploads'  # Pasta onde os arquivos serão salvos
+ALLOWED_EXTENSIONS = {'zip', 'csv', 'json', 'xml', 'xlsx', 'txt'}  # Extensões permitidas
+FILE_PATHS_LOG = 'file_paths.txt'  # Arquivo para registrar os caminhos dos arquivos
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER) 
 
 @app.route('/')
 def index():
@@ -60,38 +69,77 @@ def handle_database_request():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Erro inesperado: {str(e)}"}), 500
+    
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    global global_df  
-    file = request.files.get('file')
-    if not file:
+    global global_df
+
+    # Verifica se o arquivo foi enviado
+    if 'file' not in request.files:
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
+    file = request.files['file']
+
+    # Verifica se o arquivo tem um nome e uma extensão permitida
+    if file.filename == '':
+        return jsonify({"error": "Nome do arquivo inválido"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Formato de arquivo não suportado."}), 400
+
     try:
-        if file.filename.endswith('.zip'):
-            data = process_zip(file)  # Processa arquivos ZIP
-        elif file.filename.endswith('.csv'):
-            data = process_csv(file)  # Processa arquivos CSV
-        elif file.filename.endswith('.json'):
-            data = process_json(file)  # Processa arquivos JSON
-        elif file.filename.endswith('.xml'):
-            data = process_xml(file)  # Processa arquivos XML
-        elif file.filename.endswith('.xlsx'):
-            data = process_excel(file)  # Processa arquivos Excel
-        elif file.filename.endswith('.txt'):
-            data = process_txt(file)
+        # Gera um nome sequencial para a pasta do projeto
+        project_number = 1
+        while os.path.exists(os.path.join(UPLOAD_FOLDER, f'projeto{project_number:02}')):
+            project_number += 1
+        project_folder = os.path.join(UPLOAD_FOLDER, f'projeto{project_number:02}')
+        os.makedirs(project_folder)
+
+        # Salva o arquivo na pasta do projeto
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(project_folder, filename)
+        file.save(file_path)
+
+        # Registra o caminho do arquivo no arquivo de log
+        with open(FILE_PATHS_LOG, 'a') as log_file:
+            log_file.write(f"{file_path}\n")
+
+        # Processa o arquivo de acordo com sua extensão
+        if filename.endswith('.zip'):
+            with open(file_path, 'rb') as f:
+                data = process_zip(f)  # Processa arquivos ZIP
+        elif filename.endswith('.csv'):
+            with open(file_path, 'rb') as f:
+                data = process_csv(f)  # Processa arquivos CSV
+        elif filename.endswith('.json'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = process_json(f)  # Processa arquivos JSON
+        elif filename.endswith('.xml'):
+            with open(file_path, 'rb') as f:
+                data = process_xml(f)  # Processa arquivos XML
+        elif filename.endswith('.xlsx'):
+            with open(file_path, 'rb') as f:
+                data = process_excel(f)  # Processa arquivos Excel
+        elif filename.endswith('.txt'):
+            with open(file_path, 'rb') as f:
+                data = process_txt(f)  # Processa arquivos TXT
         else:
             return jsonify({"error": "Formato de arquivo não suportado."}), 400
 
         # Converte os dados processados para DataFrame Polars
         global_df = load_dataframe(data)
+
         return jsonify({
             "message": "Dados carregados com sucesso.",
+            "file_path": file_path,  # Caminho do arquivo salvo
             "data": data  # Dados processados do arquivo
         }), 200
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Erro no upload do arquivo: {str(e)}")  # Log do erro no backend
+        return jsonify({"error": f"Erro ao processar o arquivo: {str(e)}"}), 500
 
 @app.route('/replace_value', methods=['POST'])    
 def handle_replace_value():
@@ -155,5 +203,5 @@ def handle_media_ponderada():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    CORS(app, origins="http://localhost:3000")
+    # CORS(app, origins="http://localhost:3000")
     app.run(host='0.0.0.0', port=5000, debug=True)

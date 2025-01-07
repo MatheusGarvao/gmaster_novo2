@@ -111,10 +111,6 @@ def load_dataframe(data):
     """Converte a lista de dicionários para um DataFrame Polars"""
     return pl.DataFrame(data)
 
-
-import polars as pl
-import re
-
 def process_txt(file):
     """
     Processa um arquivo .txt, filtrando apenas as linhas que começam com '|'

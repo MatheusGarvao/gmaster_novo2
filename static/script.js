@@ -45,7 +45,8 @@ async function uploadFile() {
         });
 
         if (!response.ok) {
-            throw new Error("Erro no upload do arquivo.");
+            const errorData = await response.json();  // Captura o erro retornado pelo backend
+            throw new Error(errorData.error || "Erro no upload do arquivo.");
         }
 
         const rawData = await response.json();
@@ -58,7 +59,7 @@ async function uploadFile() {
         }
     } catch (error) {
         console.error("Erro:", error);
-        alert("Falha ao ler o arquivo.");
+        alert(`Falha ao ler o arquivo: ${error.message}`);  // Exibe a mensagem de erro detalhada
     }
 }
 
