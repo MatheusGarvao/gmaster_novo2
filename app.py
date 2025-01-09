@@ -1,207 +1,151 @@
-from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS
-import os
-from werkzeug.utils import secure_filename
-from database_manager import DatabaseConnectionManager
-from functions import (
-    replace_value,
-    transpor,
-    rename_column,
-    calcular_nova_coluna,
-    sumarizar,
-    calcular_media_ponderada   
-)
-from database_manager import DatabaseConnectionManager
-from conector import process_zip, process_excel, process_json, process_xml, process_csv, load_dataframe, process_txt
+from flask import Flask, request, jsonify
+from services.upload_service import handle_upload
+from services.file_manager import delete_uploaded_file
+from services.delta_service import write_to_delta, read_from_delta, delete_flow
+from services.transformations.replace_value import replace_value
+from services.transformations.transpor import transpor
+from services.transformations.rename_column import rename_column
+from services.transformations.calcular_nova_coluna import calcular_nova_coluna
+from services.transformations.sumarizar import sumarizar
+from services.transformations.calcular_media_ponderada import calcular_media_ponderada
+from pyspark.sql import SparkSession
 
-app = Flask(__name__, template_folder="templates")
+# Configuração do Flask
+app = Flask(__name__)
 
-db_manager = DatabaseConnectionManager()
-
-global_df = None
-
-UPLOAD_FOLDER = 'uploads'  # Pasta onde os arquivos serão salvos
-ALLOWED_EXTENSIONS = {'zip', 'csv', 'json', 'xml', 'xlsx', 'txt'}  # Extensões permitidas
-FILE_PATHS_LOG = 'file_paths.txt'  # Arquivo para registrar os caminhos dos arquivos
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER) 
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/database', methods=['POST'])
-def handle_database_request():
-    global global_df
-    try:
-        data = request.json
-        if not data:
-            return jsonify({"error": "Dados não fornecidos na requisição."}), 400
-        
-        action = data.get("action")
-        if action not in ["set_database", "load_table"]:
-            return jsonify({"error": "Ação inválida. Use 'set_database' ou 'load_table'."}), 400
-        
-        if action == "set_database":
-            db_type = data.get("db_type")
-            if not db_type:
-                return jsonify({"error": "Tipo de banco de dados não especificado."}), 400
-            db_manager.configure_connection(db_type)
-            return jsonify({
-                "message": f"Conexão configurada com sucesso para {db_type}",
-                "db_type": db_type
-            })
-        
-        elif action == "load_table":
-            table_name = data.get("table_name")
-            if not table_name:
-                return jsonify({"error": "Nome da tabela não fornecido."}), 400
-            data = db_manager.load_table_data(table_name)
-            global_df = load_dataframe(data)
-            return jsonify({
-                "message": f"Dados carregados com sucesso da tabela '{table_name}'",
-                "data": data,
-                "row_count": len(data)
-            })
-    
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"Erro inesperado: {str(e)}"}), 500
-    
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+# Configuração do Spark para Delta Lake
+spark = SparkSession.builder \
+    .appName("DeltaLakeApp") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
 
 @app.route('/upload', methods=['POST'])
-def upload_file():
-    global global_df
-
-    # Verifica se o arquivo foi enviado
+def upload_route():
     if 'file' not in request.files:
-        return jsonify({"error": "Nenhum arquivo enviado"}), 400
-
+        return jsonify({"error": "Nenhum arquivo enviado."}), 400
     file = request.files['file']
+    response, status = handle_upload(file, project_id=1)  # Exemplo com ID fixo
+    return jsonify(response), status
 
-    # Verifica se o arquivo tem um nome e uma extensão permitida
-    if file.filename == '':
-        return jsonify({"error": "Nome do arquivo inválido"}), 400
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Formato de arquivo não suportado."}), 400
-
+@app.route('/file/delete', methods=['DELETE'])
+def delete_uploaded_file_route():
+    """Exclui um arquivo base enviado."""
+    data = request.json
+    if not data or "filename" not in data:
+        return jsonify({"error": "Nome do arquivo não fornecido."}), 400
     try:
-        # Gera um nome sequencial para a pasta do projeto
-        project_number = 1
-        while os.path.exists(os.path.join(UPLOAD_FOLDER, f'projeto{project_number:02}')):
-            project_number += 1
-        project_folder = os.path.join(UPLOAD_FOLDER, f'projeto{project_number:02}')
-        os.makedirs(project_folder)
-
-        # Salva o arquivo na pasta do projeto
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(project_folder, filename)
-        file.save(file_path)
-
-        # Registra o caminho do arquivo no arquivo de log
-        with open(FILE_PATHS_LOG, 'a') as log_file:
-            log_file.write(f"{file_path}\n")
-
-        # Processa o arquivo de acordo com sua extensão
-        if filename.endswith('.zip'):
-            with open(file_path, 'rb') as f:
-                data = process_zip(f)  # Processa arquivos ZIP
-        elif filename.endswith('.csv'):
-            with open(file_path, 'rb') as f:
-                data = process_csv(f)  # Processa arquivos CSV
-        elif filename.endswith('.json'):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = process_json(f)  # Processa arquivos JSON
-        elif filename.endswith('.xml'):
-            with open(file_path, 'rb') as f:
-                data = process_xml(f)  # Processa arquivos XML
-        elif filename.endswith('.xlsx'):
-            with open(file_path, 'rb') as f:
-                data = process_excel(f)  # Processa arquivos Excel
-        elif filename.endswith('.txt'):
-            with open(file_path, 'rb') as f:
-                data = process_txt(f)  # Processa arquivos TXT
-        else:
-            return jsonify({"error": "Formato de arquivo não suportado."}), 400
-
-        # Converte os dados processados para DataFrame Polars
-        global_df = load_dataframe(data)
-
-        return jsonify({
-            "message": "Dados carregados com sucesso.",
-            "file_path": file_path,  # Caminho do arquivo salvo
-            "data": data  # Dados processados do arquivo
-        }), 200
-
-    except Exception as e:
-        print(f"Erro no upload do arquivo: {str(e)}")  # Log do erro no backend
-        return jsonify({"error": f"Erro ao processar o arquivo: {str(e)}"}), 500
-
-@app.route('/replace_value', methods=['POST'])    
-def handle_replace_value():
-    global global_df
-    try:
-        global_df, error = replace_value(global_df, request)
-        if error:  # Se houve um erro na função replace_value
-            return jsonify(error), 400
-        return jsonify(global_df.to_dicts()), 200
+        response = delete_uploaded_file(data["filename"])
+        return jsonify(response), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
-@app.route('/transpor', methods=['POST'])
-def handle_transpor():
-    global global_df
-    response = transpor(global_df, request)
-    return response
 
-@app.route('/rename_column', methods=['POST'])
-def handle_rename_column():
-    global global_df
+@app.route('/flow/<flow_id>/write', methods=['POST'])
+def write_flow(flow_id):
+    """Salva dados no fluxo Delta."""
     try:
-        global_df, error = rename_column(global_df, request)
-        if error:
-            return jsonify(error), 400
-        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
-    except ValueError as e:
+        data = request.json
+        df = spark.createDataFrame(data["data"])
+        response = write_to_delta(flow_id, df, data.get("version_name", "default"))
+        return jsonify(response), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/calcular_nova_coluna', methods=['POST'])
-def handle_calcular_nova_coluna():
-    global global_df
+@app.route('/flow/<flow_id>/read', methods=['GET'])
+def read_flow(flow_id):
+    """Lê dados do fluxo Delta."""
     try:
-        global_df, error = calcular_nova_coluna(global_df, request)
-        if error:
-            return jsonify(error), 400
-        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 500
- 
-@app.route('/sumarizar', methods=['POST'])
-def handle_sumarizar():
-    global global_df
-    try:
-        global_df, error = sumarizar(global_df, request)
-        if error:
-            return jsonify(error), 400
-        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
-    except ValueError as e:
+        df = read_from_delta(flow_id)
+        return jsonify({"data": df.limit(5).toPandas().to_dict()}), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/calcular_media_ponderada', methods=['POST'])
-def handle_media_ponderada():
-    global global_df
+@app.route('/flow/<flow_id>/delete', methods=['DELETE'])
+def delete_flow_route(flow_id):
+    """Exclui um fluxo Delta."""
     try:
-        global_df, error = calcular_media_ponderada(global_df, request)
+        response = delete_flow(flow_id)
+        return jsonify(response), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/replace_value', methods=['POST'])
+def replace_value_route(flow_id):
+    """Aplica substituição de valores no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = replace_value(df, request)
         if error:
             return jsonify(error), 400
-        return jsonify(global_df.to_dicts())  # Retorna o DataFrame atualizado para o frontend
-    except ValueError as e:
+        write_to_delta(flow_id, updated_df, "replace_value")
+        return jsonify({"message": "Valor substituído com sucesso."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/transpor', methods=['POST'])
+def transpor_route(flow_id):
+    """Transpõe os dados no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = transpor(df, request)
+        if error:
+            return jsonify(error), 400
+        write_to_delta(flow_id, updated_df, "transpor")
+        return jsonify({"message": "Dados transpostos com sucesso."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/rename_column', methods=['POST'])
+def rename_column_route(flow_id):
+    """Renomeia colunas no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = rename_column(df, request)
+        if error:
+            return jsonify(error), 400
+        write_to_delta(flow_id, updated_df, "rename_column")
+        return jsonify({"message": "Coluna renomeada com sucesso."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/calcular_nova_coluna', methods=['POST'])
+def calcular_nova_coluna_route(flow_id):
+    """Calcula uma nova coluna no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = calcular_nova_coluna(df, request)
+        if error:
+            return jsonify(error), 400
+        write_to_delta(flow_id, updated_df, "calcular_nova_coluna")
+        return jsonify({"message": "Nova coluna calculada com sucesso."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/sumarizar', methods=['POST'])
+def sumarizar_route(flow_id):
+    """Sumariza os dados no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = sumarizar(df, request)
+        if error:
+            return jsonify(error), 400
+        write_to_delta(flow_id, updated_df, "sumarizar")
+        return jsonify({"message": "Dados sumarizados com sucesso."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/flow/<flow_id>/calcular_media_ponderada', methods=['POST'])
+def calcular_media_ponderada_route(flow_id):
+    """Calcula a média ponderada no fluxo Delta."""
+    try:
+        df = read_from_delta(flow_id)
+        updated_df, error = calcular_media_ponderada(df, request)
+        if error:
+            return jsonify(error), 400
+        write_to_delta(flow_id, updated_df, "calcular_media_ponderada")
+        return jsonify({"message": "Média ponderada calculada com sucesso."}), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # CORS(app, origins="http://localhost:3000")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
