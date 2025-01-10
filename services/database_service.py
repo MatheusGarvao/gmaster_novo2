@@ -16,7 +16,6 @@ def configure_connection(db_type, env_file):
     if db_type not in supported_dbs:
         raise ValueError(f"Tipo de banco de dados '{db_type}' não suportado.")
 
-    # Carrega as variáveis do ambiente
     env_path = Path(env_file)
     if not env_path.exists():
         raise FileNotFoundError(f"Arquivo de configuração {env_file} não encontrado.")
@@ -34,16 +33,30 @@ def configure_connection(db_type, env_file):
     engine = create_engine(connection_string)
     return engine
 
-def load_table_data(engine, table_name):
-    """Carrega os dados de uma tabela e retorna como DataFrame Polars."""
-    if not table_name:
-        raise ValueError("Nome da tabela não fornecido.")
 
-    query = text(f"SELECT * FROM {table_name}")
-    with engine.connect() as connection:
-        result = connection.execute(query)
-        columns = result.keys()
-        rows = result.fetchall()
-        df = pl.DataFrame(rows, schema=columns)
-    
-    return df.fill_null("N/A")
+def load_data(engine, table_name=None, query=None):
+    """
+    Carrega dados de um banco e retorna um DataFrame Polars.
+    Se 'query' for fornecida, usa a query. 
+    Senão, se 'table_name' for fornecida, faz SELECT * dessa tabela.
+    """
+    if query:
+        with engine.connect() as connection:
+            result = connection.execute(text(query))
+            columns = result.keys()
+            rows = result.fetchall()
+            df = pl.DataFrame(rows, schema=columns)
+        return df.fill_null("N/A")
+
+    elif table_name:
+        sql = f"SELECT * FROM {table_name}"
+        with engine.connect() as connection:
+            result = connection.execute(text(sql))
+            columns = result.keys()
+            rows = result.fetchall()
+            df = pl.DataFrame(rows, schema=columns)
+        return df.fill_null("N/A")
+
+    else:
+        raise ValueError("É necessário fornecer 'query' ou 'table_name'.")
+

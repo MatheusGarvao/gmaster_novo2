@@ -1,0 +1,11 @@
+| Nome     | Idade | Cidade        |
+| Alice    | 30    | Nova York     |
+| Bob      | 25    | Los Angeles   |
+| Charlie  | 35    | Chicago       |
+| Diana    | 28    | Houston       |
+| Eduardo  | 40    | São Francisco |
+| Fernanda | 22    | Miami         |
+| Gabriel  | 31    | Boston        |
+| Helena   | 27    | Seattle       |
+| Igor     | 29    | Denver        |
+| Julia    | 26    | Nova York     |

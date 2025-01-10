@@ -1,0 +1,11 @@
+| Nome     | Salario |
+| Alice    | 355     |
+| Bob      | 352     |
+| Charlie  | 124     |
+| Diana    | 54524   |
+| Eduardo  | 2353    |
+| Fernanda | 15      |
+| Gabriel  | 12      |
+| Helena   | 350     |
+| Igor     | 250     |
+| Julia    | 500     |

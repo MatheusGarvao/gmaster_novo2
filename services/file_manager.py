@@ -34,3 +34,13 @@ def read_file(file_path):
             return pl.DataFrame(lines)
     else:
         raise ValueError(f"Formato de arquivo não suportado: {file_path}")
+    
+def delete_uploaded_file(filename):
+    """Exclui um arquivo enviado com base no nome."""
+    UPLOAD_FOLDER = "uploads"
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        return {"message": f"Arquivo {filename} deletado com sucesso."}
+    else:
+        raise FileNotFoundError(f"Arquivo {filename} não encontrado.")

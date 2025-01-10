@@ -1,7 +1,0 @@
-uploads\projeto01\customers_202411061148.csv
-uploads\projeto02\teste2.csv
-uploads\projeto03\teste.csv
-uploads\projeto04\customers_202411061148.csv
-uploads\projeto05\teste2.csv
-uploads\projeto06\teste2.csv
-uploads\projeto07\customers_202411061148.csv
